@@ -22,6 +22,9 @@ public:
 	void   CollapseSmallOrb();
     void   ToggleMenu();
 
+    void   ToggleStickyNote();
+    void   ShowSettingsPopup( cSmallOrb* anchor );
+
     QPoint AdjustCenterToScreen( QPoint center, int radius );
 
 public:
@@ -58,4 +61,7 @@ private:
     bool                _isMenuOpened         = false;
 
     cOverlay*           _overlay        = nullptr;
+
+    bool                _stickyNoteOn   = false;
+    QWidget*            _settingsPopup  = nullptr;
 };

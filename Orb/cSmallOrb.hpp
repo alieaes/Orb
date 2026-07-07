@@ -24,6 +24,7 @@ public:
 
     void          SetSvg( const QString& file );
     void          SetType( Type type );
+    void          SetState( State state );
 
 signals:
     void          Clicked();

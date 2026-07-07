@@ -1,4 +1,6 @@
 <RCC>
     <qresource prefix="cOrb">
+        <file>icons/notepad.svg</file>
+        <file>icons/settings.svg</file>
     </qresource>
 </RCC>

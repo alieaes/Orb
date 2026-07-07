@@ -1,8 +1,6 @@
 #include "stdafx.h"
 #include "cOrb.h"
 
-#include <QGraphicsDropShadowEffect>
-
 #include <Windows.h>
 
 cOrb::cOrb( QWidget* parent, Qt::WindowFlags f )
@@ -33,13 +31,6 @@ cOrb::cOrb( QWidget* parent, Qt::WindowFlags f )
     } );
 
     CreateSmallOrbs();
-
-    // 밝은 배경 위에서도 윤곽이 살도록 배경과 분리되는 그림자를 항상 붙여준다
-    auto shadow = new QGraphicsDropShadowEffect( this );
-    shadow->setBlurRadius( 24 );
-    shadow->setOffset( 0, 6 );
-    shadow->setColor( QColor( 0, 0, 0, 110 ) );
-    setGraphicsEffect( shadow );
 
     _overlay = new cOverlay;
     connect( _overlay, &cOverlay::ClickedOutside, this, &cOrb::CloseMenu );
@@ -145,6 +136,79 @@ void cOrb::CreateSmallOrbs()
 
         _vecMenu.push_back( orb );
     }
+
+    // 12시 : 스티키 노트 on/off 토글
+    auto stickyOrb = _vecMenu[ 0 ];
+
+    stickyOrb->SetSvg( ":/cOrb/icons/notepad.svg" );
+    stickyOrb->SetType( cSmallOrb::Type::Toggle );
+
+    connect( stickyOrb, &cSmallOrb::Clicked, this, &cOrb::ToggleStickyNote );
+
+    // 6시 : 설정 팝업
+    auto settingsOrb = _vecMenu[ 3 ];
+
+    settingsOrb->SetSvg( ":/cOrb/icons/settings.svg" );
+    settingsOrb->SetType( cSmallOrb::Type::Popup );
+
+    connect( settingsOrb, &cSmallOrb::Clicked, this, [ this, settingsOrb ] ()
+    {
+        ShowSettingsPopup( settingsOrb );
+    } );
+}
+
+void cOrb::ToggleStickyNote()
+{
+    // TODO: 실제 스티키 노트 창을 여기서 열고/닫기
+    _stickyNoteOn = !_stickyNoteOn;
+
+    _vecMenu[ 0 ]->SetState( _stickyNoteOn ? cSmallOrb::State::On : cSmallOrb::State::Off );
+}
+
+void cOrb::ShowSettingsPopup( cSmallOrb* anchor )
+{
+    if( _settingsPopup != nullptr )
+    {
+        _settingsPopup->close();
+        _settingsPopup = nullptr;
+        return;
+    }
+
+    auto popup = new QWidget( nullptr, Qt::Popup | Qt::FramelessWindowHint );
+
+    popup->setAttribute( Qt::WA_TranslucentBackground );
+    popup->setAttribute( Qt::WA_DeleteOnClose );
+
+    popup->setStyleSheet(
+        "QWidget#settingsRoot {"
+        "  background: rgba(30, 30, 34, 220);"
+        "  border-radius: 10px;"
+        "}"
+        "QLabel { color: white; }" );
+
+    popup->setObjectName( "settingsRoot" );
+
+    auto layout = new QVBoxLayout( popup );
+    layout->setContentsMargins( 16, 12, 16, 12 );
+
+    auto title = new QLabel( "설정", popup );
+    title->setStyleSheet( "font-weight: bold; font-size: 13px;" );
+
+    layout->addWidget( title );
+
+    popup->resize( 180, 60 );
+
+    QPoint anchorPos = anchor->mapToGlobal( QPoint( anchor->width() / 2, anchor->height() ) );
+    popup->move( anchorPos.x() - popup->width() / 2, anchorPos.y() + 8 );
+
+    _settingsPopup = popup;
+
+    connect( popup, &QObject::destroyed, this, [ this ] ()
+    {
+        _settingsPopup = nullptr;
+    } );
+
+    popup->show();
 }
 
 void cOrb::ExpandSmallOrb()

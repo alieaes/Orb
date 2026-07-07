@@ -16,6 +16,17 @@ void cSmallOrb::SetSvg( const QString& file )
 	update();
 }
 
+void cSmallOrb::SetType( Type type )
+{
+    _type = type;
+}
+
+void cSmallOrb::SetState( State state )
+{
+    _state = state;
+    update();
+}
+
 void cSmallOrb::paintEvent( QPaintEvent* paint_event )
 {
     QPainter p( this );
@@ -30,8 +41,11 @@ void cSmallOrb::paintEvent( QPaintEvent* paint_event )
 
     QColor bg( 255, 255, 255, 40 );
 
+    if( _type == Type::Toggle && _state == State::On )
+        bg = QColor( 0, 200, 140, 110 );
+
     if( _isHover == true )
-        bg.setAlpha( 70 );
+        bg.setAlpha( bg.alpha() + 30 );
 
     p.setBrush( bg );
     p.setPen( Qt::NoPen );
