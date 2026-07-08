@@ -3,12 +3,47 @@
 
 #include <Windows.h>
 
+#include <QInputDialog>
+
+#include "Tools.hpp"
+#include "cStickyNote.h"
+
 cOrb::cOrb( QWidget* parent, Qt::WindowFlags f )
 	: QMainWindow( parent, f )
 {
 	ui.setupUi( this );
 	setAttribute( Qt::WA_TranslucentBackground );
 	resize( 96, 96 );
+
+    Tools::CreateSettingFiles();
+
+    // 꺼지기 전 위치로 복원. 저장된 좌표가 없거나 지금은 없는 모니터라면(모니터 구성이 바뀐 경우 등)
+    // 화면 안으로 들어오게 보정한다.
+    QString savedX = Tools::GetSettingValue( "Default", "OrbX", "" ).toString();
+
+    if( savedX.isEmpty() == false )
+    {
+        int posX = savedX.toInt();
+        int posY = Tools::GetSettingValue( "Default", "OrbY", 0 ).toInt();
+
+        move( posX, posY );
+
+        if( QGuiApplication::screenAt( frameGeometry().center() ) == nullptr )
+        {
+            QRect rc = QGuiApplication::primaryScreen()->availableGeometry();
+            move( rc.right() - width() - 16, rc.bottom() - height() - 16 );
+        }
+    }
+
+    _positionSaveTimer = new QTimer( this );
+    _positionSaveTimer->setSingleShot( true );
+    _positionSaveTimer->setInterval( 400 );
+
+    connect( _positionSaveTimer, &QTimer::timeout, this, [ this ] ()
+    {
+        Tools::SetSettingValue( "Default", "OrbX", x() );
+        Tools::SetSettingValue( "Default", "OrbY", y() );
+    } );
 
     qApp->installEventFilter( this );
 
@@ -34,6 +69,14 @@ cOrb::cOrb( QWidget* parent, Qt::WindowFlags f )
 
     _overlay = new cOverlay;
     connect( _overlay, &cOverlay::ClickedOutside, this, &cOrb::CloseMenu );
+
+    // 이전 세션에 스티키노트가 켜져 있었으면 복원한다. 단, 암호화가 걸려있으면
+    // 비밀번호 없이 자동으로 켤 수 없으니 꺼진 채로 두고, 사용자가 직접 토글해서 풀어야 한다.
+    bool wasStickyNoteOn = Tools::GetSettingValue( "Default", "StickyNoteOn", false ).toBool();
+    bool isNoteEncrypted = Tools::GetSettingValue( "Default", "NoteEncrypt", false ).toBool();
+
+    if( wasStickyNoteOn == true && isNoteEncrypted == false )
+        OpenStickyNotes();
 }
 
 cOrb::~cOrb()
@@ -159,10 +202,105 @@ void cOrb::CreateSmallOrbs()
 
 void cOrb::ToggleStickyNote()
 {
-    // TODO: 실제 스티키 노트 창을 여기서 열고/닫기
-    _stickyNoteOn = !_stickyNoteOn;
+    bool turningOn = ( _stickyNoteOn == false );
 
-    _vecMenu[ 0 ]->SetState( _stickyNoteOn ? cSmallOrb::State::On : cSmallOrb::State::Off );
+    if( turningOn == false )
+    {
+        CloseAllStickyNotes();
+        return;
+    }
+
+    if( Tools::GetSettingValue( "Default", "NoteEncrypt", false ).toBool() == true
+        && Tools::HasNoteKey() == false )
+    {
+        bool ok = false;
+
+        QString password = QInputDialog::getText( this, "노트 잠금 해제",
+            "노트를 열려면 비밀번호를 입력하세요.", QLineEdit::Password, "", &ok );
+
+        if( ok == false || password.isEmpty() == true )
+            return; // 취소 - 토글 안 함
+
+        if( Tools::UnlockNoteKey( password ) == false )
+        {
+            QMessageBox::warning( this, "노트 잠금 해제", "비밀번호가 올바르지 않습니다." );
+            return;
+        }
+    }
+
+    OpenStickyNotes();
+}
+
+void cOrb::OpenStickyNotes()
+{
+    QStringList guids = Tools::GetSettingValue( "Default", "OpenNotes", "" )
+        .toString().split( ",", Qt::SkipEmptyParts );
+
+    if( guids.isEmpty() == true )
+    {
+        auto note = CreateStickyNoteWindow();
+        note->CreateNewNote();
+        note->show();
+    }
+    else
+    {
+        for( const QString& guid : guids )
+        {
+            auto note = CreateStickyNoteWindow();
+            note->LoadNote( guid );
+            note->show();
+        }
+    }
+
+    _stickyNoteOn = true;
+    _vecMenu[ 0 ]->SetState( cSmallOrb::State::On );
+    Tools::SetSettingValue( "Default", "StickyNoteOn", true );
+}
+
+void cOrb::CloseAllStickyNotes()
+{
+    // 개별 노트가 자기 X 버튼으로 닫힐 때와 달리, 마스터 토글로 끌 때는
+    // "열려있던 목록"에서 지우지 않는다 - 다음에 다시 켜면 그대로 복원하기 위함.
+    for( auto note : _vecNotes )
+    {
+        note->CloseForSession();
+        note->deleteLater();
+    }
+
+    _vecNotes.clear();
+
+    _stickyNoteOn = false;
+    _vecMenu[ 0 ]->SetState( cSmallOrb::State::Off );
+    Tools::SetSettingValue( "Default", "StickyNoteOn", false );
+}
+
+cStickyNote* cOrb::CreateStickyNoteWindow()
+{
+    auto note = new cStickyNote( nullptr );
+
+    connect( note, &cStickyNote::Closed, this, [ this ] ( cStickyNote* self )
+    {
+        _vecNotes.removeAll( self );
+        self->deleteLater();
+
+        if( _vecNotes.isEmpty() == true )
+        {
+            _stickyNoteOn = false;
+            _vecMenu[ 0 ]->SetState( cSmallOrb::State::Off );
+            Tools::SetSettingValue( "Default", "StickyNoteOn", false );
+        }
+    } );
+
+    connect( note, &cStickyNote::RequestNewNote, this, [ this ] ()
+    {
+        auto newNote = CreateStickyNoteWindow();
+        newNote->CreateNewNote();
+        newNote->show();
+    } );
+
+    _vecNotes.push_back( note );
+
+    return note;
 }
 
 void cOrb::ShowSettingsPopup( cSmallOrb* anchor )
@@ -174,41 +312,31 @@ void cOrb::ShowSettingsPopup( cSmallOrb* anchor )
         return;
     }
 
-    auto popup = new QWidget( nullptr, Qt::Popup | Qt::FramelessWindowHint );
+    auto settings = new cSettings( nullptr );
 
-    popup->setAttribute( Qt::WA_TranslucentBackground );
-    popup->setAttribute( Qt::WA_DeleteOnClose );
+    settings->setWindowFlags( Qt::Tool | Qt::FramelessWindowHint );
+    settings->setAttribute( Qt::WA_DeleteOnClose );
 
-    popup->setStyleSheet(
-        "QWidget#settingsRoot {"
-        "  background: rgba(30, 30, 34, 220);"
-        "  border-radius: 10px;"
-        "}"
-        "QLabel { color: white; }" );
+    // 오브가 있는 화면의 정 중앙에 띄운다 (오브가 화면 아래쪽에 있으면 anchor 기준으론 화면 밖으로 나가버림)
+    QScreen* screen = QGuiApplication::screenAt( frameGeometry().center() );
+    if( !screen )
+        screen = QGuiApplication::primaryScreen();
 
-    popup->setObjectName( "settingsRoot" );
+    QRect rc = screen->availableGeometry();
 
-    auto layout = new QVBoxLayout( popup );
-    layout->setContentsMargins( 16, 12, 16, 12 );
+    settings->move( rc.center().x() - settings->width() / 2,
+                     rc.center().y() - settings->height() / 2 );
 
-    auto title = new QLabel( "설정", popup );
-    title->setStyleSheet( "font-weight: bold; font-size: 13px;" );
+    _settingsPopup = settings;
 
-    layout->addWidget( title );
-
-    popup->resize( 180, 60 );
-
-    QPoint anchorPos = anchor->mapToGlobal( QPoint( anchor->width() / 2, anchor->height() ) );
-    popup->move( anchorPos.x() - popup->width() / 2, anchorPos.y() + 8 );
-
-    _settingsPopup = popup;
-
-    connect( popup, &QObject::destroyed, this, [ this ] ()
+    connect( settings, &QObject::destroyed, this, [ this ] ()
     {
         _settingsPopup = nullptr;
     } );
 
-    popup->show();
+    settings->show();
+    settings->raise();
+    settings->activateWindow();
 }
 
 void cOrb::ExpandSmallOrb()
@@ -669,4 +797,12 @@ void cOrb::leaveEvent( QEvent* event )
     _hoverAni->start();
 
 	QMainWindow::leaveEvent( event );
+}
+
+void cOrb::moveEvent( QMoveEvent* event )
+{
+    if( _positionSaveTimer != nullptr )
+        _positionSaveTimer->start();
+
+    QMainWindow::moveEvent( event );
 }

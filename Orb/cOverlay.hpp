@@ -2,6 +2,7 @@
 
 #include <QWidget>
 
+#
 class cOverlay : public QWidget
 {
     Q_OBJECT

@@ -2,9 +2,14 @@
 #include "cOrb.h"
 #include <QtWidgets/QApplication>
 
-int main(int argc, char *argv[])
+#include <sodium.h>
+
+int main( int argc, char* argv[] )
 {
-    QApplication a(argc, argv);
+    if( sodium_init() < 0 )
+        return -1;
+
+    QApplication a( argc, argv );
     cOrb w;
     w.show();
     return a.exec();

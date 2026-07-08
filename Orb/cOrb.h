@@ -3,8 +3,11 @@
 #include <QtWidgets/QMainWindow>
 
 #include "cOverlay.hpp"
+#include "cSettings.h"
 #include "cSmallOrb.hpp"
 #include "ui_cOrb.h"
+
+class cStickyNote;
 
 class cOrb : public QMainWindow
 {
@@ -27,6 +30,12 @@ public:
 
     QPoint AdjustCenterToScreen( QPoint center, int radius );
 
+private:
+    void   OpenStickyNotes();
+    void   CloseAllStickyNotes();
+
+    cStickyNote* CreateStickyNoteWindow();
+
 public:
     bool   eventFilter( QObject* watched, QEvent* event ) override;
 
@@ -37,6 +46,7 @@ protected:
     void   mouseMoveEvent( QMouseEvent* event ) override;
     void   enterEvent( QEnterEvent* event ) override;
     void   leaveEvent( QEvent* event ) override;
+    void   moveEvent( QMoveEvent* event ) override;
 
 private:
     Ui::cOrbClass      ui;
@@ -58,10 +68,14 @@ private:
     QVariantAnimation* _clickAni        = nullptr;
 
     QVector<cSmallOrb*> _vecMenu;
-    bool                _isMenuOpened         = false;
+    bool                _isMenuOpened   = false;
 
     cOverlay*           _overlay        = nullptr;
 
     bool                _stickyNoteOn   = false;
-    QWidget*            _settingsPopup  = nullptr;
+    cSettings*          _settingsPopup  = nullptr;
+
+    QVector<cStickyNote*> _vecNotes;
+
+    QTimer*             _positionSaveTimer = nullptr;
 };

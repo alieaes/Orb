@@ -52,6 +52,9 @@
     <ClCompile Include="cOverlay.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="cStickyNote.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <QtMoc Include="cSmallOrb.hpp">
@@ -60,5 +63,13 @@
     <QtMoc Include="cOverlay.hpp">
       <Filter>Header Files</Filter>
     </QtMoc>
+    <QtMoc Include="cStickyNote.h">
+      <Filter>Header Files</Filter>
+    </QtMoc>
+  </ItemGroup>
+  <ItemGroup>
+    <QtUic Include="cStickyNote.ui">
+      <Filter>Form Files</Filter>
+    </QtUic>
   </ItemGroup>
 </Project>
