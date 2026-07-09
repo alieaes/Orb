@@ -8,6 +8,32 @@
 #include "Tools.hpp"
 #include "cStickyNote.h"
 
+namespace
+{
+    // 화면을 통째로 덮는 오버레이 창을 대신해서, 전역 저수준 마우스 훅으로 "메뉴 바깥 클릭"을 감지한다.
+    // 오버레이 방식은 독점 전체화면 프로세스(게임 등)가 떠있을 때 작업표시줄이 사라졌다 나타나며
+    // 화면이 깜빡이는 문제가 있어서 이 방식으로 대체했다.
+    cOrb* g_orbInstance = nullptr;
+
+    LRESULT CALLBACK MouseHookProc( int code, WPARAM wParam, LPARAM lParam )
+    {
+        if( code >= 0 && g_orbInstance != nullptr
+            && ( wParam == WM_LBUTTONDOWN || wParam == WM_RBUTTONDOWN ) )
+        {
+            auto* data = reinterpret_cast<MSLLHOOKSTRUCT*>( lParam );
+            QPoint pos( data->pt.x, data->pt.y );
+            cOrb* orb = g_orbInstance;
+
+            QMetaObject::invokeMethod( orb, [ orb, pos ] ()
+            {
+                orb->OnGlobalMouseDown( pos );
+            }, Qt::QueuedConnection );
+        }
+
+        return CallNextHookEx( nullptr, code, wParam, lParam );
+    }
+}
+
 cOrb::cOrb( QWidget* parent, Qt::WindowFlags f )
 	: QMainWindow( parent, f )
 {
@@ -67,8 +93,8 @@ cOrb::cOrb( QWidget* parent, Qt::WindowFlags f )
 
     CreateSmallOrbs();
 
-    _overlay = new cOverlay;
-    connect( _overlay, &cOverlay::ClickedOutside, this, &cOrb::CloseMenu );
+    g_orbInstance = this;
+    _mouseHook = ( void* )SetWindowsHookEx( WH_MOUSE_LL, MouseHookProc, GetModuleHandle( nullptr ), 0 );
 
     // 이전 세션에 스티키노트가 켜져 있었으면 복원한다. 단, 암호화가 걸려있으면
     // 비밀번호 없이 자동으로 켤 수 없으니 꺼진 채로 두고, 사용자가 직접 토글해서 풀어야 한다.
@@ -77,10 +103,35 @@ cOrb::cOrb( QWidget* parent, Qt::WindowFlags f )
 
     if( wasStickyNoteOn == true && isNoteEncrypted == false )
         OpenStickyNotes();
+
+    Snap();
 }
 
 cOrb::~cOrb()
-{}
+{
+    if( _mouseHook != nullptr )
+        UnhookWindowsHookEx( ( HHOOK )_mouseHook );
+
+    if( g_orbInstance == this )
+        g_orbInstance = nullptr;
+}
+
+void cOrb::OnGlobalMouseDown( const QPoint& screenPos )
+{
+    if( _isMenuOpened == false )
+        return;
+
+    if( frameGeometry().contains( screenPos ) == true )
+        return;
+
+    for( auto orb : _vecMenu )
+    {
+        if( orb->isVisible() == true && orb->frameGeometry().contains( screenPos ) == true )
+            return;
+    }
+
+    CloseMenu();
+}
 
 void cOrb::Snap()
 {
@@ -129,24 +180,6 @@ void cOrb::OpenMenu()
 
     _isMenuOpened = true;
 
-    QScreen* screen = QGuiApplication::screenAt( frameGeometry().center() );
-
-    if( screen == nullptr )
-        screen = QGuiApplication::primaryScreen();
-
-    _overlay->setGeometry( screen->geometry() );
-
-    _overlay->show();
-
-    HWND hwnd = ( HWND )_overlay->winId();
-
-    LONG ex = GetWindowLong( hwnd, GWL_EXSTYLE );
-
-    SetWindowLong( hwnd,
-                   GWL_EXSTYLE,
-                   ex | WS_EX_NOACTIVATE );
-
-    // Overlay보다 위로
     raise();
     activateWindow();
 
@@ -162,8 +195,6 @@ void cOrb::CloseMenu()
 
     CollapseSmallOrb();
     Snap();
-
-    _overlay->hide();
 }
 
 void cOrb::CreateSmallOrbs()
@@ -365,10 +396,7 @@ void cOrb::ExpandSmallOrb()
         double angle = -90 + idx * 60;
         double rad = qDegreesToRadians( angle );
 
-        QPoint target(
-            center.x() + std::cos( rad ) * radius - orb->width() / 2,
-            center.y() + std::sin( rad ) * radius - orb->height() / 2 );
-
+        QPoint target( center.x() + std::cos( rad ) * radius - orb->width() / 2, center.y() + std::sin( rad ) * radius - orb->height() / 2 );
         targets.push_back( target );
     }
 
@@ -402,9 +430,7 @@ void cOrb::ExpandSmallOrb()
     // 애니메이션
     //---------------------------------------
 
-    QPoint start(
-        center.x() - 24,
-        center.y() - 24 );
+    QPoint start( center.x() - 24, center.y() - 24 );
 
     for( int idx = 0; idx < _vecMenu.size(); idx++ )
     {
