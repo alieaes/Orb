@@ -13,6 +13,12 @@
   <property name="windowTitle">
    <string>cSettings</string>
   </property>
+  <property name="styleSheet">
+   <string notr="true">QFrame#frame
+{
+border: none;
+}</string>
+  </property>
   <layout class="QVBoxLayout" name="verticalLayout">
    <property name="spacing">
     <number>0</number>
@@ -31,6 +37,13 @@
    </property>
    <item>
     <widget class="QFrame" name="frame">
+     <property name="styleSheet">
+      <string notr="true">background-color: #2d2d2d;
+QFrame#frame
+{
+border: none;
+}</string>
+     </property>
      <property name="frameShape">
       <enum>QFrame::Shape::StyledPanel</enum>
      </property>
@@ -252,7 +265,7 @@ border: none;
               </property>
               <property name="sizeHint" stdset="0">
                <size>
-                <width>546</width>
+                <width>550</width>
                 <height>20</height>
                </size>
               </property>
@@ -404,7 +417,7 @@ border: none;
            <property name="sizeHint" stdset="0">
             <size>
              <width>20</width>
-             <height>194</height>
+             <height>198</height>
             </size>
            </property>
           </spacer>
