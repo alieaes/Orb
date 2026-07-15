@@ -16,7 +16,7 @@ public:
     cOrb(QWidget *parent = nullptr, Qt::WindowFlags f = Qt::WindowStaysOnTopHint | Qt::FramelessWindowHint | Qt::Tool );
     ~cOrb();
 
-    void                   Snap();
+    void                   Snap( bool useCursorScreen = true );
     void                   OpenMenu();
     void                   CloseMenu();
     void                   CreateSmallOrbs();
@@ -79,6 +79,7 @@ private:
     QVector<cStickyNote*>  _vecNotes;
 
     QTimer*                _positionSaveTimer   = nullptr;
+    QTimer*                _topmostTimer        = nullptr;
 
     void*                  _mouseHook           = nullptr; // HHOOK - 헤더에 Windows.h를 안 끌어오려고 void*로 보관
 };

@@ -3,6 +3,7 @@
 
 #include "Tools.hpp"
 
+#include <QMenu>
 #include <QSaveFile>
 #include <QStandardItemModel>
 #include <QUuid>
@@ -76,9 +77,46 @@ cStickyNote::cStickyNote( QWidget* parent )
 		SaveMeta();
 	} );
 
+	_topmostTimer = new QTimer( this );
+	_topmostTimer->setInterval( 2000 );
+
+	connect( _topmostTimer, &QTimer::timeout, this, [ this ] ()
+	{
+		// 전체화면 게임 등이 떠서 OS가 topmost를 조용히 뺏어갔을 수 있으니, 고정된 노트만 주기적으로 다시 올려준다.
+		if( _isPinned == true )
+			SetWindowPos( ( HWND )winId(), HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE );
+	} );
+
+	_topmostTimer->start();
+
+	ui.listView->setContextMenuPolicy( Qt::CustomContextMenu );
+
+	connect( ui.listView, &QListView::customContextMenuRequested, this, [ this ] ( const QPoint& pos )
+	{
+		QModelIndex index = ui.listView->indexAt( pos );
+
+		if( index.isValid() == false )
+			return;
+
+		QString guid = index.data( Qt::UserRole ).toString();
+
+		if( guid.isEmpty() == true )
+			return;
+
+		QMenu menu( this );
+		QAction* deleteAction = menu.addAction( "노트 삭제" );
+
+		if( menu.exec( ui.listView->viewport()->mapToGlobal( pos ) ) == deleteAction )
+			RequestDeleteNote( guid );
+	} );
+
 	connect( ui.btnAdd, &QPushButton::clicked, this, &cStickyNote::RequestNewNote );
 
-	connect( ui.btnClose, &QPushButton::clicked, this, &QWidget::close );
+	connect( ui.btnClose, &QPushButton::clicked, this, [ this ] ()
+	{
+		_explicitClose = true;
+		close();
+	} );
 
 	connect( ui.btnPinned, &QPushButton::toggled, this, [ this ] ( bool checked )
 	{
@@ -385,12 +423,56 @@ void cStickyNote::closeEvent( QCloseEvent* event )
 	SaveContent();
 	SaveMeta();
 
-	s_openGuids.remove( _guid );
-	PersistOpenGuids();
+	// X 버튼으로 사용자가 명시적으로 닫을 때만 "열려있던 목록"에서 지운다.
+	// 로그오프/재부팅 등 세션 종료 시 OS가 강제로 창을 닫을 때는 여기로도 들어오는데,
+	// 그때 목록에서 지워버리면 다음 실행 때 노트가 복원되지 않고 매번 빈 노트가 새로 생긴다.
+	if( _explicitClose == true )
+	{
+		s_openGuids.remove( _guid );
+		PersistOpenGuids();
+	}
 
 	emit Closed( this );
 
 	QWidget::closeEvent( event );
+}
+
+void cStickyNote::RequestDeleteNote( const QString& guid )
+{
+	if( IsGuidOpen( guid ) == true )
+	{
+		QMessageBox::information( this, "노트 삭제", "열려있는 노트는 삭제할 수 없습니다. 먼저 노트를 닫아주세요." );
+		return;
+	}
+
+	QString title = Tools::GetSettingValue( SettingGroup( guid ), "Title", "" ).toString();
+
+	if( title.isEmpty() == true )
+		title = "(제목 없음)";
+
+	auto reply = QMessageBox::question( this, "노트 삭제",
+		QString( "'%1' 노트를 완전히 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다." ).arg( title ),
+		QMessageBox::Yes | QMessageBox::No, QMessageBox::No );
+
+	if( reply != QMessageBox::Yes )
+		return;
+
+	DeleteNoteFromDisk( guid );
+	RefreshListView();
+}
+
+bool cStickyNote::DeleteNoteFromDisk( const QString& guid )
+{
+	if( guid.isEmpty() == true || IsGuidOpen( guid ) == true )
+		return false;
+
+	QString path = Tools::GetSettingValue( "Default", "NoteSavePath", "" ).toString() + "/" + guid + ".txt";
+
+	QFile::remove( path );
+
+	Tools::RemoveSettingGroup( "Note_" + guid );
+
+	return true;
 }
 
 void cStickyNote::moveEvent( QMoveEvent* event )

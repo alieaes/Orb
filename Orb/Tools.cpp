@@ -196,6 +196,12 @@ void Tools::SetSettingValue( const QString& group, const QString& key, const QVa
 	setting.endGroup();
 }
 
+void Tools::RemoveSettingGroup( const QString& group )
+{
+	QSettings setting( GetSettingFilePath(), QSettings::IniFormat );
+	setting.remove( group );
+}
+
 bool Tools::HasNoteKey()
 {
 	return g_sessionKey.isEmpty() == false;

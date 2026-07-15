@@ -32,6 +32,9 @@ public:
 
 	static bool IsGuidOpen( const QString& guid );
 
+	// 디스크에서 노트 파일 + 메타데이터를 완전히 삭제한다 (현재 열려있는 노트는 대상에서 제외)
+	static bool DeleteNoteFromDisk( const QString& guid );
+
 signals:
 	void Closed( cStickyNote* self );
 	void RequestNewNote();
@@ -52,6 +55,7 @@ private:
 	void SwitchToNote( const QString& guid );
 	void UpdateTitleFromContent();
 	void ApplyPinned( bool pinned );
+	void RequestDeleteNote( const QString& guid );
 	QString NoteFilePath( const QString& guid ) const;
 	QString SettingGroup( const QString& guid ) const;
 
@@ -62,7 +66,9 @@ private:
 	Ui::cStickyNote      ui;
 
 	QString              _guid;
-	bool                 _isPinned    = false;
-	QTimer*              _saveTimer   = nullptr;
-	QStandardItemModel*  _listModel   = nullptr;
+	bool                 _isPinned         = false;
+	bool                 _explicitClose    = false; // 사용자가 X 버튼을 눌러서 닫는 경우만 true - 세션 종료 등 외부에서 강제로 닫힐 때와 구분한다
+	QTimer*              _saveTimer        = nullptr;
+	QTimer*              _topmostTimer     = nullptr;
+	QStandardItemModel*  _listModel        = nullptr;
 };

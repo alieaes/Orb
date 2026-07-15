@@ -104,7 +104,22 @@ cOrb::cOrb( QWidget* parent, Qt::WindowFlags f )
     if( wasStickyNoteOn == true && isNoteEncrypted == false )
         OpenStickyNotes();
 
-    Snap();
+    // 시작할 때는 마우스 커서 위치가 아니라, 방금 복원한 오브 자신의 위치가 있는
+    // 모니터를 기준으로 스냅해야 한다 (커서 기준으로 하면 실행 시점에 마우스가
+    // 다른 모니터에 있을 때 엉뚱한 모니터로 끌려간다).
+    Snap( false );
+
+    // Qt의 WindowStaysOnTopHint는 전체화면 독점 게임 등이 뜨면 OS가 조용히 topmost를
+    // 뺏어가도 알려주지 않는다. 주기적으로 다시 topmost로 올려서 원상복구한다.
+    _topmostTimer = new QTimer( this );
+    _topmostTimer->setInterval( 2000 );
+
+    connect( _topmostTimer, &QTimer::timeout, this, [ this ] ()
+    {
+        SetWindowPos( ( HWND )winId(), HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE );
+    } );
+
+    _topmostTimer->start();
 }
 
 cOrb::~cOrb()
@@ -133,9 +148,12 @@ void cOrb::OnGlobalMouseDown( const QPoint& screenPos )
     CloseMenu();
 }
 
-void cOrb::Snap()
+void cOrb::Snap( bool useCursorScreen )
 {
-    QScreen* scr = QGuiApplication::screenAt( QCursor::pos() );
+    QScreen* scr = useCursorScreen == true
+        ? QGuiApplication::screenAt( QCursor::pos() )
+        : QGuiApplication::screenAt( frameGeometry().center() );
+
     if( !scr )
         scr = QGuiApplication::primaryScreen();
 
