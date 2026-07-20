@@ -4,6 +4,8 @@
 #include <Windows.h>
 
 #include <QInputDialog>
+#include <QMenu>
+#include <QSystemTrayIcon>
 
 #include "Tools.hpp"
 #include "cStickyNote.h"
@@ -40,6 +42,8 @@ cOrb::cOrb( QWidget* parent, Qt::WindowFlags f )
 	ui.setupUi( this );
 	setAttribute( Qt::WA_TranslucentBackground );
 	resize( 96, 96 );
+
+    setWindowIcon( QIcon( ":/cOrb/icons/icon.png" ) );
 
     Tools::CreateSettingFiles();
 
@@ -92,6 +96,7 @@ cOrb::cOrb( QWidget* parent, Qt::WindowFlags f )
     } );
 
     CreateSmallOrbs();
+    CreateTrayIcon();
 
     g_orbInstance = this;
     _mouseHook = ( void* )SetWindowsHookEx( WH_MOUSE_LL, MouseHookProc, GetModuleHandle( nullptr ), 0 );
@@ -386,6 +391,45 @@ void cOrb::ShowSettingsPopup( cSmallOrb* anchor )
     settings->show();
     settings->raise();
     settings->activateWindow();
+}
+
+void cOrb::CreateTrayIcon()
+{
+    _trayMenu = new QMenu();
+
+    QAction* toggleAction = _trayMenu->addAction( "오브 보이기/숨기기" );
+    connect( toggleAction, &QAction::triggered, this, &cOrb::ToggleOrbVisible );
+
+    _trayMenu->addSeparator();
+
+    QAction* exitAction = _trayMenu->addAction( "종료" );
+    connect( exitAction, &QAction::triggered, qApp, &QApplication::quit );
+
+    _trayIcon = new QSystemTrayIcon( QIcon( ":/cOrb/icons/icon.png" ), this );
+    _trayIcon->setToolTip( "Orb" );
+    _trayIcon->setContextMenu( _trayMenu );
+
+    connect( _trayIcon, &QSystemTrayIcon::activated, this, [ this ] ( QSystemTrayIcon::ActivationReason reason )
+    {
+        if( reason == QSystemTrayIcon::Trigger || reason == QSystemTrayIcon::DoubleClick )
+            ToggleOrbVisible();
+    } );
+
+    _trayIcon->show();
+}
+
+void cOrb::ToggleOrbVisible()
+{
+    if( isVisible() == true )
+    {
+        hide();
+    }
+    else
+    {
+        show();
+        raise();
+        activateWindow();
+    }
 }
 
 void cOrb::ExpandSmallOrb()

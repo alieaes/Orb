@@ -7,6 +7,8 @@
 #include "ui_cOrb.h"
 
 class cStickyNote;
+class QSystemTrayIcon;
+class QMenu;
 
 class cOrb : public QMainWindow
 {
@@ -38,6 +40,9 @@ private:
     void                   CloseAllStickyNotes();
 
     cStickyNote*           CreateStickyNoteWindow();
+
+    void                   CreateTrayIcon();
+    void                   ToggleOrbVisible();
 
 public:
     bool                   eventFilter( QObject* watched, QEvent* event ) override;
@@ -82,4 +87,7 @@ private:
     QTimer*                _topmostTimer        = nullptr;
 
     void*                  _mouseHook           = nullptr; // HHOOK - 헤더에 Windows.h를 안 끌어오려고 void*로 보관
+
+    QSystemTrayIcon*       _trayIcon            = nullptr;
+    QMenu*                 _trayMenu            = nullptr;
 };
